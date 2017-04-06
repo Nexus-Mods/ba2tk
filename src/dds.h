@@ -12,6 +12,7 @@
 #ifndef _DDS_H_
 #define _DDS_H_
 
+#include "ba2types.h"
 #include <dxgiformat.h>
 
 #pragma pack(push,1)
@@ -20,14 +21,14 @@
 
 struct DDS_PIXELFORMAT
 {
-    DWORD dwSize;
-    DWORD dwFlags;
-    DWORD dwFourCC;
-    DWORD dwRGBBitCount;
-    DWORD dwRBitMask;
-    DWORD dwGBitMask;
-    DWORD dwBBitMask;
-    DWORD dwABitMask;
+    BSAULong dwSize;
+    BSAULong dwFlags;
+    BSAULong dwFourCC;
+    BSAULong dwRGBBitCount;
+    BSAULong dwRBitMask;
+    BSAULong dwGBitMask;
+    BSAULong dwBBitMask;
+    BSAULong dwABitMask;
 };
 
 #define DDS_FOURCC      0x00000004  // DDPF_FOURCC
@@ -95,18 +96,18 @@ const DDS_PIXELFORMAT DDSPF_DX10 =
 
 typedef struct
 {
-    DWORD dwSize;
-    DWORD dwHeaderFlags;
-    DWORD dwHeight;
-    DWORD dwWidth;
-    DWORD dwPitchOrLinearSize;
-    DWORD dwDepth; // only if DDS_HEADER_FLAGS_VOLUME is set in dwHeaderFlags
-    DWORD dwMipMapCount;
-    DWORD dwReserved1[11];
+    BSAULong dwSize;
+    BSAULong dwHeaderFlags;
+    BSAULong dwHeight;
+    BSAULong dwWidth;
+    BSAULong dwPitchOrLinearSize;
+    BSAULong dwDepth; // only if DDS_HEADER_FLAGS_VOLUME is set in dwHeaderFlags
+    BSAULong dwMipMapCount;
+    BSAULong dwReserved1[11];
     DDS_PIXELFORMAT ddspf;
-    DWORD dwSurfaceFlags;
-    DWORD dwCubemapFlags;
-    DWORD dwReserved2[3];
+    BSAULong dwSurfaceFlags;
+    BSAULong dwCubemapFlags;
+    BSAULong dwReserved2[3];
 } DDS_HEADER;
 
 #if 0

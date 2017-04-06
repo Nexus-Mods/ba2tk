@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 
 #include "errorcodes.h"
+#include "ba2type.h"
 #include "ba2types.h"
 #include "semaphore.h"
 #include <vector>
@@ -134,24 +135,24 @@ private:
 		BSAULong	nameHash;		// 00
 		char	ext[4];			// 04
 		BSAULong	dirHash;		// 08
-		UInt8	unk0C;			// 0C
-		UInt8	numChunks;		// 0D
-		UInt16	chunkHdrLen;	// 0E - size of one chunk header
-		UInt16	height;			// 10
-		UInt16	width;			// 12
-		UInt8	numMips;		// 14
-		UInt8	format;			// 15 - DXGI_FORMAT
-		UInt16	unk16;			// 16 - 0800
+		BSAUChar	unk0C;			// 0C
+		BSAUChar	numChunks;		// 0D
+		BSAUShort	chunkHdrLen;	// 0E - size of one chunk header
+		BSAUShort	height;			// 10
+		BSAUShort	width;			// 12
+		BSAUChar	numMips;		// 14
+		BSAUChar	format;			// 15 - DXGI_FORMAT
+		BSAUShort	unk16;			// 16 - 0800
 	};
 
   struct DX10Chunk
 	{
-		UInt64	offset;			// 00
-		UInt32	packedLen;		// 08
-		UInt32	unpackedLen;	// 0C
-		UInt16	startMip;		// 10
-		UInt16	endMip;			// 12
-		UInt32	unk14;			// 14 - BAADFOOD
+		BSAHash	offset;			// 00
+		BSAULong	packedLen;		// 08
+		BSAULong	unpackedLen;	// 0C
+		BSAUShort	startMip;		// 10
+		BSAUShort	endMip;			// 12
+		BSAULong	unk14;			// 14 - BAADFOOD
 	};
 
 	struct Texture
@@ -159,11 +160,6 @@ private:
 		FileEntry_DX10 texhdr;
 		std::vector <DX10Chunk>	texchunks;
 	};
-
-  struct FileInfo {
-    File::Ptr file;
-    DataBuffer data;
-  };
 
 
 private:

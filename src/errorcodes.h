@@ -1,7 +1,5 @@
 /*
-Mod Organizer BSA handling
-
-Copyright (C) 2012 Sebastian Herbord. All rights reserved.
+Nexus Mod Manager 2 BA2 handling
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -23,8 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #define ERRORCODES_H
 
 
-namespace BSA {
-
+namespace BA2 {
 
 enum EErrorCode {
   ERROR_NONE,
