@@ -87,12 +87,11 @@ public:
   EType getType() const { return m_Type; }
   /**
    * extract a file from the archive
-   * @param file descriptor of the file to extract
    * @param outputDirectory name of the directory to extract to.
    *                        may be absolute or relative
    * @return ERROR_NONE on success or an error code
    */
-  EErrorCode extract(File::Ptr file, const char *outputDirectory) const;
+  EErrorCode extract(const char *outputDirectory) const;
 
   /**
    * extract all files. this is potentially faster than iterating over all files and
@@ -107,21 +106,6 @@ public:
                         const std::function<bool (int value, std::string fileName)> &progress,
                         bool overwrite = true);
 
-  /**
-   * @param file the file to check
-   * @return true if the file is compressed, false otherwise
-   */
-  bool compressed(const File::Ptr &file);
-  /**
-   * create a new file to be placed in this archive. The new file is NOT
-   * added to a folder, use BSA::Folder::addFile for that
-   * @param name name of the file to be used inside the archive
-   * @param sourceName filename path to the file to add
-   * @param compressed true if the file should be compressed (not supported yet!)
-   * @return pointer to the new file
-   */
-  File::Ptr createFile(const std::string &name, const std::string &sourceName,
-                       bool compressed);
 
 private:
 

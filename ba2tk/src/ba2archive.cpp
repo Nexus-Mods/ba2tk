@@ -214,6 +214,7 @@ BSAULong Archive::determineFileFlags(const std::vector<std::string> &fileList) c
   return result;
 }
 
+
 EErrorCode Archive::Extract(const char *destination)
 {
 	if(m_hdr.IsGeneral())
@@ -225,7 +226,7 @@ EErrorCode Archive::Extract(const char *destination)
 
   return ERROR_NONE;
 }
-
+  
 
 void Archive::extractGeneral(const char *destination)
 {
@@ -275,6 +276,7 @@ void Archive::extractGeneral(const char *destination)
 		}
 	}
 }
+
 
 void Archive::extractDX10(const char *destination)
 {
