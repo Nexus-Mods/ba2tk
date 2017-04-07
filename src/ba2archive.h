@@ -54,38 +54,49 @@ public:
 
   typedef std::pair<std::shared_ptr<unsigned char>, BSAULong> DataBuffer;
 
-
 public:
+
   /**
    * constructor
    */
   Archive();
   ~Archive();
+
   /**
    * read the archive from file
    * @param fileName name of the file to read from
    * @return ERROR_NONE on success or an error code
    */
   EErrorCode read(const char *fileName);
+
   /**
    * write the archive to disc
    * @param fileName name of the file to write to
    * @return ERROR_NONE on success or an error code
    */
   EErrorCode write(const char *fileName);
+
   /**
    * @brief close the archive
    */
   void close();
+
   /**
    * change the archive type
    * @param type new archive type
    */
   void setType(EType type) { m_Type = type; }
+
   /**
    * @return type of the archive
    */
   EType getType() const { return m_Type; }
+  
+  /**
+   * @return list of files in this archive
+   */
+  std::vector<std::string> const getFileList();
+
   /**
    * extract a file from the archive
    * @param outputDirectory name of the directory to extract to.
@@ -105,15 +116,14 @@ public:
    */
   EErrorCode extractAll(const char *outputDirectory,
                         const std::function<bool (int value, std::string fileName)> &progress,
-                        bool overwrite = true);
-
+                        bool overwrite = true) const;
 
 private:
 
   struct Header {
     char fileIdentifier[4];
     BSAULong version;
-    char bsaType[4];
+    EType type;
     BSAULong fileCount;
     BSAHash offsetNameTable;
   };
@@ -165,20 +175,20 @@ private:
 private:
 
   static Header readHeader(std::fstream &infile);
+  static void writeHeader(std::fstream &outfile, EType type, BSAULong fileVersion,
+    BSAULong numFiles, BSAHash nameTableOffset);
 
-  static EType typeFromID(char typeID);
+  static EType typeFromID(const char *typeID);
+  static const char *typeToID(EType type);
 
 	bool readGeneral();
 	bool readDX10();
 	bool readNametable();
 
-  void Extract(const char *destination);
-  void extractGeneral(const char *destination);
-	void extractDX10(const char *destination);
+  EErrorCode extractAllGeneral(const char *destination) const;
+	EErrorCode extractAllDX10(const char *destination) const;
 
-  void UseATIFourCC() { m_useATIFourCC = false; }
-
-  char typeToID(EType type);
+  void UseATIFourCC() { m_UseATIFourCC = false; }
 
   BSAULong countFiles() const;
 
@@ -197,7 +207,7 @@ private:
   EType m_Type;
   Header m_Header;
 
-  bool m_useATIFourCC;
+  bool m_UseATIFourCC;
 
   std::mutex m_ReaderMutex;
   std::mutex m_ExtractMutex;

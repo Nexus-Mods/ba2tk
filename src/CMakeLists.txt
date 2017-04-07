@@ -12,23 +12,18 @@ SET(ba2tk_SRCS
     ba2archive.cpp
   )
 
-SET(bsatk_HDRS
+SET(ba2tk_HDRS
     errorcodes.h
-	ba2type.h
+    ba2type.h
     ba2types.h
     ba2exception.h
     ba2archive.h
-	dds.h
+    dds.h
   )
-
-SET(Boost_USE_STATIC_LIBS        ON)
-SET(Boost_USE_MULTITHREADED      ON)
-SET(Boost_USE_STATIC_RUNTIME    OFF)
-FIND_PACKAGE(Boost REQUIRED)
 
 FIND_PACKAGE(zlib REQUIRED)
 
-INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS}
+INCLUDE_DIRECTORIES(common
                     ${ZLIB_INCLUDE_DIRS}
                     ${ZLIB_INCLUDE_DIRS}/build) # in case of an out-of-source build
 

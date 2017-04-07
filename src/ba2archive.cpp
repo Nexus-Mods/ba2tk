@@ -10,7 +10,6 @@
 #include <mutex>
 #include <zlib.h>
 #include <sys/stat.h>
-#include <IFileStream.h>
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
@@ -34,17 +33,21 @@ Archive::~Archive()
 }
 
 
-EType Archive::typeFromID(char *typeID)
+EType Archive::typeFromID(const char *typeID)
 {
-  switch (typeID) {
-    case "GNRL": return TYPE_GENERAL;
-    case "DX10": return TYPE_DX10;
-    default: throw data_invalid_exception(makeString("invalid type %d", typeID));
+  if (strncmp(typeID, "GNRL", 4) == 0) {
+    return TYPE_GENERAL;
+  }
+  else if (strncmp(typeID, "DX10", 4) == 0) {
+    return TYPE_DX10;
+  }
+  else {
+    throw data_invalid_exception(makeString("invalid type %d", typeID));
   }
 }
 
 
-char Archive::typeToID(EType type)
+const char *Archive::typeToID(EType type)
 {
   switch (type) {
     case TYPE_GENERAL: return "GNRL";
@@ -63,8 +66,12 @@ Archive::Header Archive::readHeader(std::fstream &infile)
   if (memcmp(fileID, "BTDX", 4) != 0) {
     throw data_invalid_exception(makeString("not a ba2 file"));
   }
+
   result.version          = readType<BSAULong>(infile);
-  result.bsatype  = typeFromID(readType<char>(infile));
+  char typeBuffer[5];
+  infile.read(typeBuffer, 4);
+  typeBuffer[4] = '\0';
+  result.type          = typeFromID(typeBuffer);
   result.fileCount        = readType<BSAULong>(infile);
   result.offsetNameTable  = readType<BSAHash>(infile); 
 
@@ -82,8 +89,8 @@ EErrorCode Archive::read(const char *fileName)
   try {
     try {
       m_Header = readHeader(m_File);
-    } catch (const data_invalid_exception &e) {
-      throw data_invalid_exception(makeString("%s (filename: %s)", e.what(), fileName));
+    } catch (const data_invalid_exception&) {
+      return ERROR_INVALIDDATA;
     }
 
     m_Type = m_Header.type;
@@ -99,8 +106,6 @@ EErrorCode Archive::read(const char *fileName)
         return ERROR_INVALIDDATA;
     }
 
-    BSAHash headerEnd = m_File->GetOffset();
-    
     if (!readNametable())
       return ERROR_INVALIDDATA;
 
@@ -113,53 +118,51 @@ EErrorCode Archive::read(const char *fileName)
 
 bool Archive::readGeneral()
 {
-	m_Files.resize(m_Header.fileCount);
-	if(m_Header.fileCount)
-		m_File->ReadBuf(&m_Files[0], sizeof(FileEntry) * m_Header.fileCount);
+  m_Files.resize(m_Header.fileCount);
+  if (m_Header.fileCount) {
+    m_File.read((char*)&m_Files[0], sizeof(FileEntry) * m_Header.fileCount);
+  }
 
-	return true;
+  return true;
 }
 
 
 bool Archive::readDX10()
 {
-	m_Textures.resize(m_Header.fileCount);
+  m_Textures.resize(m_Header.fileCount);
 
-	for(UInt32 i = 0; i < m_Textures.size(); i++)
-	{
-		Texture *texture = &m_Textures[i];
+  for(uint32_t i = 0; i < m_Textures.size(); i++)
+  {
+    Texture *texture = &m_Textures[i];
+    m_File.read((char*)&texture->texhdr, sizeof(texture->texhdr));
 
-		m_File->ReadBuf(&texture->texhdr, sizeof(texture->texhdr));
+    texture->texchunks.resize(texture->texhdr.numChunks);
+    if(texture->texhdr.numChunks)
+      m_File.read((char*)&texture->texchunks[0], sizeof(DX10Chunk) * texture->texhdr.numChunks);
+  }
 
-		texture->texchunks.resize(texture->texhdr.numChunks);
-		if(texture->texhdr.numChunks)
-			m_File->ReadBuf(&texture->texchunks[0], sizeof(DX10Chunk) * texture->texhdr.numChunks);
-	}
-
-	return true;
+  return true;
 }
 
 
 bool Archive::readNametable()
 {
-	m_File->SetOffset(m_Header.nameTableOffset);
-	char *buffer = new char[0x10000];
-	UInt32 index = 0;
+  m_File.seekg(0, std::ios_base::end);
+  size_t fileSize = m_File.tellg();
+  m_File.seekg(m_Header.offsetNameTable);
+  std::unique_ptr<char[]> buffer(new char[0x10000]);
 
-	while(m_File->GetRemain() >= 2)
-	{
-		UInt32 length = m_File->Read16();
+  while((fileSize - m_File.tellg()) >= 2)
+  {
+    uint32_t length = readType<uint16_t>(m_File);
 
-		m_File->ReadBuf(buffer, length);
-		buffer[length] = 0;
+    m_File.read(buffer.get(), length);
+    buffer[length] = '\0';
 
-		m_TableNames.push_back(buffer);
+    m_TableNames.push_back(std::string(buffer.get()));
+  }
 
-		index++;
-	}
-
-	delete [] buffer;
-	return true;
+  return true;
 }
 
 void Archive::close()
@@ -214,195 +217,194 @@ BSAULong Archive::determineFileFlags(const std::vector<std::string> &fileList) c
   return result;
 }
 
-
-EErrorCode Archive::Extract(const char *destination)
+std::vector<std::string> const Archive::getFileList()
 {
-	if(m_hdr.IsGeneral())
-		extractGeneral(destination);
-	else if(m_hdr.IsDX10())
-		extractDX10(destination);
-	else
-		return ERROR_INVALIDDATA;
+  return m_TableNames;
+}
 
-  return ERROR_NONE;
+EErrorCode Archive::extractAll(const char *destination,
+                        const std::function<bool (int value, std::string fileName)> &progress,
+                        bool overwrite) const
+{
+  switch (m_Header.type) {
+    case TYPE_GENERAL: return extractAllGeneral(destination);
+    case TYPE_DX10: return extractAllDX10(destination);
+    default: return ERROR_INVALIDDATA;
+  }
 }
   
 
-void Archive::extractGeneral(const char *destination)
+EErrorCode Archive::extractAllGeneral(const char *destination) const
 {
-	ASSERT(m_Files.size() == m_TableNames.size());
+  if (m_Files.size() != m_TableNames.size()) {
+    return ERROR_INVALIDDATA;
+  }
 
-	for(BSAULong i = 0; i < m_Files.size(); i++)
-	{
-		FileEntry *file = &m_Files[i];
+  for(BSAULong i = 0; i < m_Files.size(); ++i)
+  {
+    const FileEntry &file = m_Files[i];
 
-		std::string destinationPath = destination;
-		destinationPath += "\\";
-		destinationPath += m_TableNames[i];
+    std::string destinationPath = std::string(destination) + "\\" + m_TableNames[i];
 
-		IFileStream::MakeAllDirs(destinationPath.c_str());
+    std::fstream outFile;
+    outFile.open(destinationPath.c_str(), fstream::out | fstream::binary);
+    if (m_File.is_open()) {
+      m_File.seekg(file.offset);
 
-		IFileStream fileStream;
-		if(fileStream.Create(destinationPath.c_str()))
-		{
-			m_File->SetOffset(file->offset);
+      if ((file.packedLen != 0) && (file.unpackedLen != file.packedLen)) {
+        BSAULong unpackedLen = file.unpackedLen;
+        if (!unpackedLen) {
+          unpackedLen = file.unk20;	// ???
+        }
 
-			if(file->packedLen && (file->unpackedLen != file->packedLen))
-			{
-				BSAULong unpackedLen = file->unpackedLen;
-				if(!unpackedLen)
-					unpackedLen = file->unk20;	// what
+        // TODO Umm, maybe don't read the whole thing in one go? Who knows how large
+        //   this file could be. Do this in chunks like civilized people!
+        std::unique_ptr<BSAUChar[]> sourceBuffer(new BSAUChar[file.packedLen]);
 
-				BSAUChar *sourceBuffer = new BSAUChar[file->packedLen];
+        m_File.read((char*)sourceBuffer.get(), file.packedLen);
 
-				m_File->ReadBuf(sourceBuffer, file->packedLen);
+        std::unique_ptr<BSAUChar[]> destinationBuffer(new BSAUChar[unpackedLen]);
 
-				BSAUChar *destinationBuffer = new BSAUChar[unpackedLen];
+        BSAULong bytesWritten = unpackedLen;
+        int result = uncompress(destinationBuffer.get(), &bytesWritten, sourceBuffer.get(), file.packedLen);
+        if ((result != Z_OK) || (bytesWritten != unpackedLen)) {
+          return ERROR_INVALIDDATA;
+        }
 
-				BSAULong bytesWritten = unpackedLen;
-				int result = uncompress(destinationBuffer, &bytesWritten, sourceBuffer, file->packedLen);
-				ASSERT(result == Z_OK);
-				ASSERT(bytesWritten == unpackedLen);
-
-				fileStream.WriteBuf(destinationBuffer, unpackedLen);
-
-				delete [] destinationBuffer;
-				delete [] sourceBuffer;
-			}
-			else
-			{
-				IDataStream::CopySubStreams(&fileStream, m_File, file->unpackedLen);
-			}
-		}
-	}
+        outFile.write((const char*)destinationBuffer.get(), unpackedLen);
+      }
+      else {
+        std::unique_ptr<BSAUChar[]> destinationBuffer(new BSAUChar[file.unpackedLen]);
+        m_File.read((char*)destinationBuffer.get(), file.unpackedLen);
+        outFile.write((const char*)destinationBuffer.get(), file.unpackedLen);
+      }
+    }
+  }
+  return ERROR_NONE;
 }
 
 
-void Archive::extractDX10(const char *destination)
+EErrorCode Archive::extractAllDX10(const char *destination) const
 {
-	for(BSAULong i = 0; i < m_Textures.size(); i++)
-	{
-		Texture *texture = &m_Textures[i];
+  for(BSAULong i = 0; i < m_Textures.size(); ++i)
+  {
+    const Texture *texture = &m_Textures[i];
 
-		std::string destinationPath = destination;
-		destinationPath += "\\";
-		destinationPath += m_TableNames[i];
+    std::string destinationPath = destination;
+    destinationPath += "\\";
+    destinationPath += m_TableNames[i];
 
-		IFileStream::MakeAllDirs(destinationPath.c_str());
+    std::fstream outFile;
+    outFile.open(destinationPath.c_str(), fstream::out | fstream::binary);
+    if (m_File.is_open()) {
+      DDS_HEADER ddsHeader = { 0 };
 
-		IFileStream fileStream;
-		if(fileStream.Create(destinationPath.c_str()))
-		{
-			DDS_HEADER ddsHeader = { 0 };
+      ddsHeader.dwSize = sizeof(ddsHeader);
+      ddsHeader.dwHeaderFlags = DDS_HEADER_FLAGS_TEXTURE | DDS_HEADER_FLAGS_LINEARSIZE | DDS_HEADER_FLAGS_MIPMAP;
+      ddsHeader.dwHeight = texture->texhdr.height;
+      ddsHeader.dwWidth = texture->texhdr.width;
+      ddsHeader.dwMipMapCount = texture->texhdr.numMips;
+      ddsHeader.ddspf.dwSize = sizeof(DDS_PIXELFORMAT);
+      ddsHeader.dwSurfaceFlags = DDS_SURFACE_FLAGS_TEXTURE | DDS_SURFACE_FLAGS_MIPMAP;
 
-			ddsHeader.dwSize = sizeof(ddsHeader);
-			ddsHeader.dwHeaderFlags = DDS_HEADER_FLAGS_TEXTURE | DDS_HEADER_FLAGS_LINEARSIZE | DDS_HEADER_FLAGS_MIPMAP;
-			ddsHeader.dwHeight = texture->hdr.height;
-			ddsHeader.dwWidth = texture->hdr.width;
-			ddsHeader.dwMipMapCount = texture->hdr.numMips;
-			ddsHeader.ddspf.dwSize = sizeof(DDS_PIXELFORMAT);
-			ddsHeader.dwSurfaceFlags = DDS_SURFACE_FLAGS_TEXTURE | DDS_SURFACE_FLAGS_MIPMAP;
+      bool ok = true;
 
-			bool ok = true;
+      switch(texture->texhdr.format)
+      {
+      case DXGI_FORMAT_BC1_UNORM:
+        ddsHeader.ddspf.dwFlags = DDS_FOURCC;
+        ddsHeader.ddspf.dwFourCC = MAKEFOURCC('D', 'X', 'T', '1');
+        ddsHeader.dwPitchOrLinearSize = texture->texhdr.width * texture->texhdr.height / 2;	// 4bpp
+        break;
 
-			switch(texture->hdr.format)
-			{
-			case DXGI_FORMAT_BC1_UNORM:
-				ddsHeader.ddspf.dwFlags = DDS_FOURCC;
-				ddsHeader.ddspf.dwFourCC = MAKEFOURCC('D', 'X', 'T', '1');
-				ddsHeader.dwPitchOrLinearSize = texture->hdr.width * texture->hdr.height / 2;	// 4bpp
-				break;
+      case DXGI_FORMAT_BC2_UNORM:
+        ddsHeader.ddspf.dwFlags = DDS_FOURCC;
+        ddsHeader.ddspf.dwFourCC = MAKEFOURCC('D', 'X', 'T', '3');
+        ddsHeader.dwPitchOrLinearSize = texture->texhdr.width * texture->texhdr.height;	// 8bpp
+        break;
 
-			case DXGI_FORMAT_BC2_UNORM:
-				ddsHeader.ddspf.dwFlags = DDS_FOURCC;
-				ddsHeader.ddspf.dwFourCC = MAKEFOURCC('D', 'X', 'T', '3');
-				ddsHeader.dwPitchOrLinearSize = texture->hdr.width * texture->hdr.height;	// 8bpp
-				break;
+      case DXGI_FORMAT_BC3_UNORM:
+        ddsHeader.ddspf.dwFlags = DDS_FOURCC;
+        ddsHeader.ddspf.dwFourCC = MAKEFOURCC('D', 'X', 'T', '5');
+        ddsHeader.dwPitchOrLinearSize = texture->texhdr.width * texture->texhdr.height;	// 8bpp
+        break;
 
-			case DXGI_FORMAT_BC3_UNORM:
-				ddsHeader.ddspf.dwFlags = DDS_FOURCC;
-				ddsHeader.ddspf.dwFourCC = MAKEFOURCC('D', 'X', 'T', '5');
-				ddsHeader.dwPitchOrLinearSize = texture->hdr.width * texture->hdr.height;	// 8bpp
-				break;
+      case DXGI_FORMAT_BC5_UNORM:
+        ddsHeader.ddspf.dwFlags = DDS_FOURCC;
+        if(m_UseATIFourCC)
+          ddsHeader.ddspf.dwFourCC = MAKEFOURCC('A', 'T', 'I', '2');	// this is more correct but the only thing I have found that supports it is the nvidia photoshop plugin
+        else
+          ddsHeader.ddspf.dwFourCC = MAKEFOURCC('D', 'X', 'T', '5');
 
-			case DXGI_FORMAT_BC5_UNORM:
-				ddsHeader.ddspf.dwFlags = DDS_FOURCC;
-				if(m_useATIFourCC)
-					ddsHeader.ddspf.dwFourCC = MAKEFOURCC('A', 'T', 'I', '2');	// this is more correct but the only thing I have found that supports it is the nvidia photoshop plugin
-				else
-					ddsHeader.ddspf.dwFourCC = MAKEFOURCC('D', 'X', 'T', '5');
+        ddsHeader.dwPitchOrLinearSize = texture->texhdr.width * texture->texhdr.height;	// 8bpp
+        break;
 
-				ddsHeader.dwPitchOrLinearSize = texture->hdr.width * texture->hdr.height;	// 8bpp
-				break;
+      case DXGI_FORMAT_BC7_UNORM:
+        // totally wrong but not worth writing out the DX10 header
+        ddsHeader.ddspf.dwFlags = DDS_FOURCC;
+        ddsHeader.ddspf.dwFourCC = MAKEFOURCC('B', 'C', '7', '\0');
+        ddsHeader.dwPitchOrLinearSize = texture->texhdr.width * texture->texhdr.height;	// 8bpp
+        break;
 
-			case DXGI_FORMAT_BC7_UNORM:
-				// totally wrong but not worth writing out the DX10 header
-				ddsHeader.ddspf.dwFlags = DDS_FOURCC;
-				ddsHeader.ddspf.dwFourCC = MAKEFOURCC('B', 'C', '7', '\0');
-				ddsHeader.dwPitchOrLinearSize = texture->hdr.width * texture->hdr.height;	// 8bpp
-				break;
+      case DXGI_FORMAT_B8G8R8A8_UNORM:
+        ddsHeader.ddspf.dwFlags = DDS_RGBA;
+        ddsHeader.ddspf.dwRGBBitCount = 32;
+        ddsHeader.ddspf.dwRBitMask =	0x00FF0000;
+        ddsHeader.ddspf.dwGBitMask =	0x0000FF00;
+        ddsHeader.ddspf.dwBBitMask =	0x000000FF;
+        ddsHeader.ddspf.dwABitMask =	0xFF000000;
+        ddsHeader.dwPitchOrLinearSize = texture->texhdr.width * texture->texhdr.height * 4;	// 32bpp
+        break;
 
-			case DXGI_FORMAT_B8G8R8A8_UNORM:
-				ddsHeader.ddspf.dwFlags = DDS_RGBA;
-				ddsHeader.ddspf.dwRGBBitCount = 32;
-				ddsHeader.ddspf.dwRBitMask =	0x00FF0000;
-				ddsHeader.ddspf.dwGBitMask =	0x0000FF00;
-				ddsHeader.ddspf.dwBBitMask =	0x000000FF;
-				ddsHeader.ddspf.dwABitMask =	0xFF000000;
-				ddsHeader.dwPitchOrLinearSize = texture->hdr.width * texture->hdr.height * 4;	// 32bpp
-				break;
+      case DXGI_FORMAT_R8_UNORM:
+        ddsHeader.ddspf.dwFlags = DDS_RGB;
+        ddsHeader.ddspf.dwRGBBitCount = 8;
+        ddsHeader.ddspf.dwRBitMask =	0xFF;
+        ddsHeader.dwPitchOrLinearSize = texture->texhdr.width * texture->texhdr.height;	// 8bpp
+        break;
 
-			case DXGI_FORMAT_R8_UNORM:
-				ddsHeader.ddspf.dwFlags = DDS_RGB;
-				ddsHeader.ddspf.dwRGBBitCount = 8;
-				ddsHeader.ddspf.dwRBitMask =	0xFF;
-				ddsHeader.dwPitchOrLinearSize = texture->hdr.width * texture->hdr.height;	// 8bpp
-				break;
+      default:
+        ok = false;
+        break;
+      }
 
-			default:
-				ok = false;
-				break;
-			}
+      if(ok)
+      {
+        writeType<uint32_t>(outFile, DDS_MAGIC);
+        writeType(outFile, ddsHeader);
 
-			if(ok)
-			{
-				fileStream.Write32(DDS_MAGIC);	// 'DDS '
-				fileStream.WriteBuf(&ddsHeader, sizeof(ddsHeader));
+        for(BSAULong j = 0; j < texture->texchunks.size(); ++j) {
+          const DX10Chunk *chunk = &texture->texchunks[j];
 
-				for(BSAULong j = 0; j < texture->chunks.size(); j++)
-				{
-					DX10Chunk *chunk = &texture->chunks[j];
+          std::unique_ptr<BSAUChar[]> sourceBuffer(new BSAUChar[chunk->packedLen]);
 
-					BSAUChar *sourceBuffer = new BSAUChar[chunk->packedLen];
+          m_File.seekg(chunk->offset);
+          m_File.read((char*)sourceBuffer.get(), chunk->packedLen);
 
-					m_File->SetOffset(chunk->offset);
-					m_File->ReadBuf(sourceBuffer, chunk->packedLen);
+          std::unique_ptr<BSAUChar[]> destinationBuffer(new BSAUChar[chunk->unpackedLen]);
 
-					BSAUChar *destinationBuffer = new BSAUChar[chunk->unpackedLen];
+          BSAULong bytesWritten = chunk->unpackedLen;
+          int result = uncompress(destinationBuffer.get(), &bytesWritten, sourceBuffer.get(), chunk->packedLen);
+          if ((result != Z_OK) || (bytesWritten != chunk->unpackedLen)) {
+            return ERROR_INVALIDDATA;
+          }
 
-					BSAULong bytesWritten = chunk->unpackedLen;
-					int result = uncompress(destinationBuffer, &bytesWritten, sourceBuffer, chunk->packedLen);
-					ASSERT(result == Z_OK);
-					ASSERT(bytesWritten == chunk->unpackedLen);
-
-					fileStream.WriteBuf(destinationBuffer, chunk->unpackedLen);
-
-					delete [] destinationBuffer;
-					delete [] sourceBuffer;
-				}
-			}
-		}
-	}
+          outFile.write((char*)destinationBuffer.get(), chunk->unpackedLen);
+        }
+      }
+    }
+  }
+  return ERROR_NONE;
 }
 
 
-void Archive::writeHeader(std::fstream &outfile, BSAULong fileVersion, BSAULong numFiles,
+void Archive::writeHeader(std::fstream &outfile, EType type, BSAULong fileVersion, BSAULong numFiles,
                           BSAHash nameTableOffset)
 {
   // dummy code
   outfile.write("BTDX", 4);
   writeType<BSAULong>(outfile, fileVersion);
-  writeType<BSAUChar>(outfile, typeToID(m_Type));
+  outfile.write(typeToID(type), 4);
   writeType<BSAULong>(outfile, numFiles);
   writeType<BSAULong>(outfile, nameTableOffset);
 }
