@@ -1,5 +1,10 @@
-//--------------------------------------------------------------------------------------
-// dds.h
+//
+// Copyright (c) Microsoft. All rights reserved.
+// This code is licensed under the MIT License (MIT).
+// THIS CODE IS PROVIDED *AS IS* WITHOUT WARRANTY OF
+// ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING ANY
+// IMPLIED WARRANTIES OF FITNESS FOR A PARTICULAR
+// PURPOSE, MERCHANTABILITY, OR NON-INFRINGEMENT.
 //
 // This header defines constants and structures that are useful when parsing 
 // DDS files.  DDS files were originally designed to use several structures
@@ -7,7 +12,9 @@
 // such as DDSURFACEDESC2 and DDSCAPS2.  This file defines similar 
 // (compatible) constants and structures so that one can use DDS files 
 // without needing to include ddraw.h.
-//--------------------------------------------------------------------------------------
+//
+// http://go.microsoft.com/fwlink/?LinkId=248926
+// http://go.microsoft.com/fwlink/?LinkId=248929
 
 #ifndef _DDS_H_
 #define _DDS_H_

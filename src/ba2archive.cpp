@@ -131,7 +131,7 @@ bool Archive::readDX10()
 {
   m_Textures.resize(m_Header.fileCount);
 
-  for(uint32_t i = 0; i < m_Textures.size(); i++)
+  for(BSAULong i = 0; i < m_Textures.size(); i++)
   {
     Texture *texture = &m_Textures[i];
     m_File.read((char*)&texture->texhdr, sizeof(texture->texhdr));
@@ -154,7 +154,7 @@ bool Archive::readNametable()
 
   while((fileSize - m_File.tellg()) >= 2)
   {
-    uint32_t length = readType<uint16_t>(m_File);
+    BSAULong length = readType<BSAUShort>(m_File);
 
     m_File.read(buffer.get(), length);
     buffer[length] = '\0';
@@ -370,7 +370,7 @@ EErrorCode Archive::extractAllDX10(const char *destination) const
 
       if(ok)
       {
-        writeType<uint32_t>(outFile, DDS_MAGIC);
+        writeType<BSAULong>(outFile, DDS_MAGIC);
         writeType(outFile, ddsHeader);
 
         for(BSAULong j = 0; j < texture->texchunks.size(); ++j) {
