@@ -82,6 +82,16 @@ Archive::Header Archive::readHeader(std::fstream &infile)
 EErrorCode Archive::read(const char *fileName)
 {
   m_File.open(fileName, fstream::in | fstream::binary);
+  return read();
+}
+
+EErrorCode Archive::read(const wchar_t *fileName)
+{
+  m_File.open(fileName, fstream::in | fstream::binary);
+  return read();
+}
+
+EErrorCode Archive::read() {
   if (!m_File.is_open()) {
     return ERROR_FILENOTFOUND;
   }
