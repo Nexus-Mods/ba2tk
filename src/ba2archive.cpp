@@ -1,8 +1,10 @@
 #include "ba2archive.h"
 #include "ba2exception.h"
+#include <Windows.h>
 #include "dds.h"
 #include <cstring>
 #include <fstream>
+#include <filesystem>
 #include <algorithm>
 #include <chrono>
 #include <queue>
@@ -10,8 +12,6 @@
 #include <mutex>
 #include <zlib.h>
 #include <sys/stat.h>
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
 
 using std::fstream;
 using namespace std::chrono_literals;
@@ -256,9 +256,11 @@ EErrorCode Archive::extractAllGeneral(const char *destination) const
 
     std::string destinationPath = std::string(destination) + "\\" + m_TableNames[i];
 
+    // ensure all directories exist
+    std::filesystem::create_directories(std::filesystem::path(destinationPath).parent_path());
     std::fstream outFile;
     outFile.open(destinationPath.c_str(), fstream::out | fstream::binary);
-    if (m_File.is_open()) {
+    if (outFile.is_open()) {
       m_File.seekg(file.offset);
 
       if ((file.packedLen != 0) && (file.unpackedLen != file.packedLen)) {
@@ -275,7 +277,7 @@ EErrorCode Archive::extractAllGeneral(const char *destination) const
 
         std::unique_ptr<BSAUChar[]> destinationBuffer(new BSAUChar[unpackedLen]);
 
-        BSAULong bytesWritten = unpackedLen;
+        uLongf bytesWritten = unpackedLen;
         int result = uncompress(destinationBuffer.get(), &bytesWritten, sourceBuffer.get(), file.packedLen);
         if ((result != Z_OK) || (bytesWritten != unpackedLen)) {
           return ERROR_INVALIDDATA;
@@ -288,6 +290,9 @@ EErrorCode Archive::extractAllGeneral(const char *destination) const
         m_File.read((char*)destinationBuffer.get(), file.unpackedLen);
         outFile.write((const char*)destinationBuffer.get(), file.unpackedLen);
       }
+    }
+    else {
+      return ERROR_ACCESSFAILED;
     }
   }
   return ERROR_NONE;
@@ -306,7 +311,7 @@ EErrorCode Archive::extractAllDX10(const char *destination) const
 
     std::fstream outFile;
     outFile.open(destinationPath.c_str(), fstream::out | fstream::binary);
-    if (m_File.is_open()) {
+    if (outFile.is_open()) {
       DDS_HEADER ddsHeader = { 0 };
 
       ddsHeader.dwSize = sizeof(ddsHeader);
@@ -393,7 +398,7 @@ EErrorCode Archive::extractAllDX10(const char *destination) const
 
           std::unique_ptr<BSAUChar[]> destinationBuffer(new BSAUChar[chunk->unpackedLen]);
 
-          BSAULong bytesWritten = chunk->unpackedLen;
+          uLongf bytesWritten = chunk->unpackedLen;
           int result = uncompress(destinationBuffer.get(), &bytesWritten, sourceBuffer.get(), chunk->packedLen);
           if ((result != Z_OK) || (bytesWritten != chunk->unpackedLen)) {
             return ERROR_INVALIDDATA;
@@ -402,6 +407,9 @@ EErrorCode Archive::extractAllDX10(const char *destination) const
           outFile.write((char*)destinationBuffer.get(), chunk->unpackedLen);
         }
       }
+    }
+    else {
+      return ERROR_ACCESSFAILED;
     }
   }
   return ERROR_NONE;

@@ -23,25 +23,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <fstream>
 #include <string>
 #include "ba2exception.h"
-
-#ifdef WIN32
-#include <Windows.h>
-
-typedef unsigned char BSAUChar;
-typedef unsigned short BSAUShort;
-typedef unsigned long BSAULong;
-typedef UINT64 BSAHash;
-
-#else // WIN32
-
 #include <stdint.h>
 
 typedef uint8_t BSAUChar;
 typedef uint16_t BSAUShort;
 typedef uint32_t BSAULong;
 typedef uint64_t BSAHash;
-
-#endif // WIN32
 
 template <typename T> static T readType(std::fstream &file)
 {

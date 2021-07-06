@@ -120,6 +120,9 @@ namespace BA2 {
 
   private:
 
+// these structs need to be aligned properly. pragma pack is a visual studio feature but
+// both clang and gcc seem to support it
+#pragma pack(push, 4)
     struct Header {
       char fileIdentifier[4];
       BSAULong version;
@@ -170,6 +173,7 @@ namespace BA2 {
       FileEntry_DX10 texhdr;
       std::vector <DX10Chunk>	texchunks;
     };
+#pragma pack(pop)
 
   private:
 
