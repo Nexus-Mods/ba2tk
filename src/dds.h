@@ -20,7 +20,15 @@
 #define _DDS_H_
 
 #include "ba2types.h"
+#ifdef _WIN32
 #include <dxgiformat.h>
+#else
+#include "wine/basetsd.h"
+typedef unsigned char BYTE;
+typedef unsigned long DWORD;
+#include "wine/d3dukmdt.h"
+#include "wine/dxgiformat.idl"
+#endif
 
 #pragma pack(push,1)
 
