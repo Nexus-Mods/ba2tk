@@ -1,6 +1,8 @@
 #include "ba2archive.h"
 #include "ba2exception.h"
+#ifdef _WIN32
 #include <Windows.h>
+#endif
 #include "dds.h"
 #include <cstring>
 #include <fstream>
@@ -73,7 +75,7 @@ Archive::Header Archive::readHeader(std::fstream &infile)
   typeBuffer[4] = '\0';
   result.type          = typeFromID(typeBuffer);
   result.fileCount        = readType<BSAULong>(infile);
-  result.offsetNameTable  = readType<BSAHash>(infile); 
+  result.offsetNameTable  = readType<BSAHash>(infile);
 
   return result;
 }
@@ -85,11 +87,13 @@ EErrorCode Archive::read(const char *fileName)
   return read();
 }
 
+#ifdef _WIN32
 EErrorCode Archive::read(const wchar_t *fileName)
 {
   m_File.open(fileName, fstream::in | fstream::binary);
   return read();
 }
+#endif
 
 EErrorCode Archive::read() {
   if (!m_File.is_open()) {
@@ -242,7 +246,7 @@ EErrorCode Archive::extractAll(const char *destination,
     default: return ERROR_INVALIDDATA;
   }
 }
-  
+
 
 EErrorCode Archive::extractAllGeneral(const char *destination) const
 {
